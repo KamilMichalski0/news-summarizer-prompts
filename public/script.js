@@ -43,7 +43,9 @@ const NewsApp = {
     async checkAPIStatus() {
         try {
             const response = await fetch('/api/status');
-            const status = await response.json();
+            const response_data = await response.json();
+            // Handle new API response format
+            const status = response_data.data || response_data;
             
             // Aktualizacja statusu DeepL
             const deeplStatus = document.getElementById('deepl-status');
@@ -93,10 +95,14 @@ const NewsApp = {
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Błąd pobierania newsów');
+                // Handle new API error format
+                const errorMessage = errorData.error?.message || errorData.error || errorData.message || 'Błąd pobierania newsów';
+                throw new Error(errorMessage);
             }
             
-            const data = await response.json();
+            const response_data = await response.json();
+            // Handle new API response format with success/data structure
+            const data = response_data.data || response_data;
             this.showResults(data);
             
         } catch (error) {

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Summarizer</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-newspaper"></i> News Summarizer</h1>
+            <p>Automatyczne ładowanie, tłumaczenie i streszczanie newsów z RSS</p>
+            <div id="api-status" class="api-status">
+                <div class="status-item">
+                    <span class="status-label">DeepL:</span>
+                    <span id="deepl-status" class="status-indicator">Sprawdzanie...</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">OpenAI:</span>
+                    <span id="openai-status" class="status-indicator">Sprawdzanie...</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="input-section">
+                <h2>Wprowadź URL RSS</h2>
+                <form id="rss-form">
+                    <div class="input-group">
+                        <input 
+                            type="url" 
+                            id="rss-url" 
+                            placeholder="https://example.com/feed.xml"
+                            required
+                        >
+                        <button type="submit" id="fetch-btn">
+                            <i class="fas fa-download"></i> Pobierz Newsy
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="example-feeds">
+                    <h3>Przykładowy RSS:</h3>
+                    <div class="feed-buttons">
+                        <button class="example-feed" data-url="https://feeds.bbci.co.uk/news/rss.xml">
+                            BBC News (sprawdzony)
+                        </button>
+                    </div>
+                    <p class="feed-note">
+                        <i class="fas fa-info-circle"></i>
+                        Wprowadź własny URL RSS aby przetestować inne źródła newsów
+                    </p>
+                </div>
+            </section>
+
+            <section id="loading-section" class="loading-section" style="display: none;">
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+                <p>Pobieranie i przetwarzanie newsów...</p>
+                <div class="progress-steps">
+                    <div class="step" id="step-1">
+                        <i class="fas fa-download"></i> Pobieranie RSS
+                    </div>
+                    <div class="step" id="step-2">
+                        <i class="fas fa-language"></i> Tłumaczenie
+                    </div>
+                    <div class="step" id="step-3">
+                        <i class="fas fa-robot"></i> Streszczanie
+                    </div>
+                </div>
+            </section>
+
+            <section id="results-section" class="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2 id="feed-title"></h2>
+                    <a id="feed-link" href="#" target="_blank" rel="noopener noreferrer">
+                        <i class="fas fa-external-link-alt"></i> Źródło
+                    </a>
+                </div>
+                <div id="articles-container" class="articles-container"></div>
+                <button id="new-search-btn" class="new-search-btn">
+                    <i class="fas fa-plus"></i> Nowe wyszukiwanie
+                </button>
+            </section>
+
+            <section id="error-section" class="error-section" style="display: none;">
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Wystąpił błąd</h3>
+                    <p id="error-text"></p>
+                    <button id="retry-btn" class="retry-btn">
+                        <i class="fas fa-redo"></i> Spróbuj ponownie
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>© 2024 News Summarizer. Powered by DeepL & OpenAI.</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

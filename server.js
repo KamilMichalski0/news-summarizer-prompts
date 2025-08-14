@@ -5,15 +5,18 @@ const path = require('path');
 // Import configuration and logging
 const config = require('./src/config/env');
 const logger = require('./src/config/logger');
+const { initializeDatabase } = require('./src/config/database');
 
 // Import middleware
-const { securityHeaders, rateLimiter, validateURL, validateText } = require('./src/middleware/security');
+const { securityHeaders, rateLimiter, validateURL, validateText, createUserRateLimit } = require('./src/middleware/security');
+const { authenticateUser, optionalAuth, checkSupabaseConnection } = require('./src/middleware/auth');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
 
 // Import controllers
 const newsController = require('./src/controllers/newsController');
 const translationController = require('./src/controllers/translationController');
 const statusController = require('./src/controllers/statusController');
+const userController = require('./src/controllers/userController');
 
 const app = express();
 
@@ -46,25 +49,59 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Root endpoint - serve index.html
+// Root endpoint - serve index.html with Supabase configuration injected (must come before static middleware)
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const fs = require('fs');
+    let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    
+    // Inject Supabase configuration into the page
+    const configScript = `
+        <script>
+            window.SUPABASE_URL = '${config.SUPABASE_URL || ''}';
+            window.SUPABASE_ANON_KEY = '${config.SUPABASE_ANON_KEY || ''}';
+        </script>
+    `;
+    
+    // Insert config script at the beginning of head tag (after opening)
+    html = html.replace('<head>', `<head>${configScript}`);
+    
+    res.send(html);
 });
+
+// Serve static files (after root endpoint to prevent index.html conflict)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint (no rate limiting)
 app.get('/health', statusController.getHealth);
 
-// API Routes
-// News endpoints
-app.get('/api/news', newsController.getNews);
-app.post('/api/news', validateURL, newsController.processNews);
+// API Routes - All require authentication
+// Create user-specific rate limiter
+const userRateLimit = createUserRateLimit(50, 15); // 50 requests per 15 minutes per user
 
-// Translation endpoints
-app.post('/api/translate', validateText, translationController.translateText);
-app.get('/api/translate/usage', translationController.getUsage);
+// User management endpoints
+app.get('/api/user/profile', authenticateUser, userController.getProfile);
+app.put('/api/user/profile', authenticateUser, userRateLimit, userController.updateProfile);
+app.get('/api/user/dashboard', authenticateUser, userController.getDashboard);
+app.delete('/api/user/account', authenticateUser, userController.deleteAccount);
+
+// User feeds management
+app.get('/api/user/feeds', authenticateUser, userController.getFeeds);
+app.post('/api/user/feeds', authenticateUser, userRateLimit, validateURL, userController.addFeed);
+app.delete('/api/user/feeds/:feedId', authenticateUser, userController.removeFeed);
+
+// User reading history
+app.get('/api/user/history', authenticateUser, userController.getReadingHistory);
+app.post('/api/user/history/read', authenticateUser, userRateLimit, userController.markAsRead);
+app.get('/api/user/summaries', authenticateUser, userController.getSummaries);
+
+// News endpoints (user-specific)
+app.get('/api/news', authenticateUser, userRateLimit, newsController.getNews);
+app.post('/api/news/process', authenticateUser, userRateLimit, newsController.processNews);
+
+// Translation endpoints (user-specific)
+app.post('/api/translate', authenticateUser, userRateLimit, validateText, translationController.translateText);
+app.get('/api/translate/usage', authenticateUser, translationController.getUsage);
+app.get('/api/translate/languages', authenticateUser, translationController.getLanguages);
 
 // Status endpoints
 app.get('/api/status', statusController.getStatus);
@@ -93,7 +130,7 @@ const gracefulShutdown = (signal) => {
 };
 
 // Start server
-const server = app.listen(config.PORT, () => {
+const server = app.listen(config.PORT, async () => {
     logger.info('News Summarizer server started', {
         port: config.PORT,
         environment: config.NODE_ENV,
@@ -103,13 +140,37 @@ const server = app.listen(config.PORT, () => {
     // Log API services status
     const services = {
         deepl: config.DEEPL_API_KEY && config.DEEPL_API_KEY !== 'your_deepl_key_here',
-        openai: config.OPENAI_API_KEY && config.OPENAI_API_KEY !== 'your_openai_key_here'
+        openai: config.OPENAI_API_KEY && config.OPENAI_API_KEY !== 'your_openai_key_here',
+        supabase: config.SUPABASE_URL && config.SUPABASE_ANON_KEY
     };
     
     logger.info('API Services Status', {
         deepl: services.deepl ? 'configured' : 'not configured',
-        openai: services.openai ? 'configured' : 'not configured'
+        openai: services.openai ? 'configured' : 'not configured',
+        supabase: services.supabase ? 'configured' : 'not configured'
     });
+    
+    // Check Supabase connection and initialize database
+    try {
+        const connected = await checkSupabaseConnection();
+        logger.info('Supabase connection status', { connected });
+        
+        if (connected && services.supabase) {
+            // Initialize database tables automatically
+            logger.info('Starting automatic database initialization...');
+            const dbInitialized = await initializeDatabase();
+            
+            if (dbInitialized) {
+                logger.info('Database initialization completed successfully');
+            } else {
+                logger.warn('Database initialization completed with warnings - check logs for details');
+            }
+        } else {
+            logger.warn('Skipping database initialization - Supabase not properly configured or connected');
+        }
+    } catch (error) {
+        logger.error('Startup database initialization failed', { error: error.message });
+    }
 });
 
 // Handle uncaught exceptions

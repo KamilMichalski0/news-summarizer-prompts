@@ -3,17 +3,18 @@ const rateLimit = require('express-rate-limit');
 const validator = require('validator');
 const config = require('../config/env');
 const logger = require('../config/logger');
+const { createClient } = require('@supabase/supabase-js');
 
 // Security headers
 const securityHeaders = helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
             imgSrc: ["'self'", "data:", "https:"],
-            fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-            connectSrc: ["'self'"]
+            fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
+            connectSrc: ["'self'", config.SUPABASE_URL || 'https://*.supabase.co']
         }
     }
 });
@@ -110,10 +111,137 @@ const sanitizeInput = (req, res, next) => {
     next();
 };
 
+// JWT validation middleware for Supabase tokens
+const validateJWT = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    message: 'Authorization header required',
+                    code: 'NO_AUTH_HEADER'
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        const token = authHeader.startsWith('Bearer ') 
+            ? authHeader.substring(7) 
+            : authHeader;
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    message: 'Bearer token required',
+                    code: 'NO_TOKEN'
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Basic JWT format validation
+        const tokenParts = token.split('.');
+        if (tokenParts.length !== 3) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    message: 'Invalid JWT format',
+                    code: 'INVALID_JWT_FORMAT'
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        try {
+            const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+            
+            // Check if token is expired
+            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+                return res.status(401).json({
+                    success: false,
+                    error: {
+                        message: 'Token has expired',
+                        code: 'TOKEN_EXPIRED'
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            return res.status(401).json({
+                success: false,
+                error: {
+                    message: 'Invalid JWT payload',
+                    code: 'INVALID_JWT_PAYLOAD'
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        next();
+    } catch (error) {
+        logger.error('JWT validation error', {
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip
+        });
+        
+        return res.status(500).json({
+            success: false,
+            error: {
+                message: 'Token validation error',
+                code: 'JWT_VALIDATION_ERROR'
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+};
+
+// User-specific rate limiting
+const createUserRateLimit = (maxRequests = 30, windowMinutes = 15) => {
+    return rateLimit({
+        windowMs: windowMinutes * 60 * 1000,
+        max: maxRequests,
+        keyGenerator: (req) => {
+            return req.user ? `user_${req.user.id}` : `ip_${req.ip}`;
+        },
+        message: {
+            success: false,
+            error: {
+                message: `Przekroczono limit ${maxRequests} requestów na ${windowMinutes} minut`,
+                code: 'RATE_LIMIT_EXCEEDED'
+            },
+            timestamp: new Date().toISOString()
+        },
+        standardHeaders: true,
+        legacyHeaders: false,
+        handler: (req, res) => {
+            const identifier = req.user ? `user ${req.user.id}` : `IP ${req.ip}`;
+            logger.warn('User rate limit exceeded', { 
+                identifier,
+                userAgent: req.get('User-Agent'),
+                endpoint: req.path
+            });
+            res.status(429).json({
+                success: false,
+                error: {
+                    message: `Przekroczono limit ${maxRequests} requestów na ${windowMinutes} minut`,
+                    code: 'RATE_LIMIT_EXCEEDED'
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+};
+
 module.exports = {
     securityHeaders,
     rateLimiter,
     validateURL,
     validateText,
-    sanitizeInput
+    sanitizeInput,
+    validateJWT,
+    createUserRateLimit
 };

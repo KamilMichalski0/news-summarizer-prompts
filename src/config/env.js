@@ -6,6 +6,11 @@ module.exports = {
     DEEPL_API_KEY: process.env.DEEPL_API_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     
+    // Supabase configuration
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
+    
     // Security settings
     ALLOWED_DOMAINS: [
         'feeds.bbci.co.uk',
@@ -24,7 +29,7 @@ module.exports = {
     // CORS settings
     CORS_ORIGINS: process.env.NODE_ENV === 'production' 
         ? ['https://yourdomain.com'] 
-        : ['http://localhost:3000'],
+        : ['http://localhost:3000', 'http://localhost:8000'],
     
     // Cache settings
     CACHE_TTL: 300, // 5 minutes

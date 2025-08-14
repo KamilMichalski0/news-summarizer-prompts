@@ -13,10 +13,12 @@ class StatusController {
             const status = {
                 deepl: translationService.isConfigured(),
                 openai: summaryService.isConfigured(),
+                supabase: config.SUPABASE_URL && config.SUPABASE_ANON_KEY,
                 services: {
                     rss: true, // RSS parser doesn't need API key
                     translation: translationService.isConfigured(),
                     summarization: summaryService.isConfigured(),
+                    authentication: config.SUPABASE_URL && config.SUPABASE_ANON_KEY,
                     cache: true
                 },
                 environment: config.NODE_ENV,

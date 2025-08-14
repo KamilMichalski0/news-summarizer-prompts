@@ -5,13 +5,74 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>News Summarizer</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="auth-styles.css">
+    <link rel="stylesheet" href="dashboard-styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div class="container">
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content">
+            <div class="auth-container">
+                <h2 id="auth-title">Zaloguj się</h2>
+                <div class="auth-tabs">
+                    <button id="login-tab" class="auth-tab active">Logowanie</button>
+                    <button id="signup-tab" class="auth-tab">Rejestracja</button>
+                </div>
+                
+                <form id="auth-form">
+                    <div class="input-group">
+                        <label for="auth-email">Email:</label>
+                        <input type="email" id="auth-email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="auth-password">Hasło:</label>
+                        <input type="password" id="auth-password" required>
+                    </div>
+                    <button type="submit" id="auth-submit" class="btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Zaloguj się
+                    </button>
+                </form>
+                
+                <div class="auth-links">
+                    <a href="#" id="forgot-password">Zapomniałeś hasła?</a>
+                </div>
+                
+                <div id="auth-error" class="error-message" style="display: none;"></div>
+                <div id="auth-success" class="success-message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Ładowanie...</p>
+        </div>
+    </div>
+
+    <div class="container" id="main-app" style="display: none;">
         <header>
-            <h1><i class="fas fa-newspaper"></i> News Summarizer</h1>
-            <p>Automatyczne ładowanie, tłumaczenie i streszczanie newsów z RSS</p>
+            <div class="header-top">
+                <h1><i class="fas fa-newspaper"></i> News Summarizer</h1>
+                <div class="user-controls">
+                    <div class="user-info">
+                        <i class="fas fa-user"></i>
+                        <span id="user-name">Użytkownik</span>
+                    </div>
+                    <div class="header-buttons">
+                        <button id="dashboard-btn" class="btn-secondary">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </button>
+                        <button id="logout-btn" class="btn-danger">
+                            <i class="fas fa-sign-out-alt"></i> Wyloguj
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <p>Spersonalizowane newsy, tłumaczenia i streszczenia</p>
             <div id="api-status" class="api-status">
                 <div class="status-item">
                     <span class="status-label">DeepL:</span>
@@ -21,88 +82,182 @@
                     <span class="status-label">OpenAI:</span>
                     <span id="openai-status" class="status-indicator">Sprawdzanie...</span>
                 </div>
+                <div class="status-item">
+                    <span class="status-label">Supabase:</span>
+                    <span id="supabase-status" class="status-indicator">Sprawdzanie...</span>
+                </div>
             </div>
         </header>
 
         <main>
-            <section class="input-section">
-                <h2>Wprowadź URL RSS</h2>
-                <form id="rss-form">
-                    <div class="input-group">
-                        <input 
-                            type="url" 
-                            id="rss-url" 
-                            placeholder="https://example.com/feed.xml"
-                            required
-                        >
-                        <button type="submit" id="fetch-btn">
-                            <i class="fas fa-download"></i> Pobierz Newsy
-                        </button>
-                    </div>
-                </form>
-                
-                <div class="example-feeds">
-                    <h3>Przykładowy RSS:</h3>
-                    <div class="feed-buttons">
-                        <button class="example-feed" data-url="https://feeds.bbci.co.uk/news/rss.xml">
-                            BBC News (sprawdzony)
-                        </button>
-                    </div>
-                    <p class="feed-note">
-                        <i class="fas fa-info-circle"></i>
-                        Wprowadź własny URL RSS aby przetestować inne źródła newsów
-                    </p>
-                </div>
-            </section>
-
-            <section id="loading-section" class="loading-section" style="display: none;">
-                <div class="loading-spinner">
-                    <i class="fas fa-spinner fa-spin"></i>
-                </div>
-                <p>Pobieranie i przetwarzanie newsów...</p>
-                <div class="progress-steps">
-                    <div class="step" id="step-1">
-                        <i class="fas fa-download"></i> Pobieranie RSS
-                    </div>
-                    <div class="step" id="step-2">
-                        <i class="fas fa-language"></i> Tłumaczenie
-                    </div>
-                    <div class="step" id="step-3">
-                        <i class="fas fa-robot"></i> Streszczanie
-                    </div>
-                </div>
-            </section>
-
-            <section id="results-section" class="results-section" style="display: none;">
-                <div class="results-header">
-                    <h2 id="feed-title"></h2>
-                    <a id="feed-link" href="#" target="_blank" rel="noopener noreferrer">
-                        <i class="fas fa-external-link-alt"></i> Źródło
-                    </a>
-                </div>
-                <div id="articles-container" class="articles-container"></div>
-                <button id="new-search-btn" class="new-search-btn">
-                    <i class="fas fa-plus"></i> Nowe wyszukiwanie
-                </button>
-            </section>
-
-            <section id="error-section" class="error-section" style="display: none;">
-                <div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Wystąpił błąd</h3>
-                    <p id="error-text"></p>
-                    <button id="retry-btn" class="retry-btn">
-                        <i class="fas fa-redo"></i> Spróbuj ponownie
+            <!-- Dashboard View -->
+            <section id="dashboard-view" class="view-section" style="display: none;">
+                <div class="dashboard-header">
+                    <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+                    <button id="back-to-news" class="btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Powrót do newsów
                     </button>
                 </div>
+                
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-rss"></i> Moje RSS Feedy</h3>
+                        <div id="user-feeds-list">Ładowanie...</div>
+                        <button id="add-feed-btn" class="btn-primary">
+                            <i class="fas fa-plus"></i> Dodaj RSS
+                        </button>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-history"></i> Historia odczytanych</h3>
+                        <div id="reading-history">Ładowanie...</div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-file-text"></i> Moje streszczenia</h3>
+                        <div id="user-summaries">Ładowanie...</div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-cog"></i> Ustawienia</h3>
+                        <div class="settings-form">
+                            <label>Domyślny język tłumaczenia:</label>
+                            <select id="default-language">
+                                <option value="pl">Polski</option>
+                                <option value="en">Angielski</option>
+                                <option value="de">Niemiecki</option>
+                                <option value="fr">Francuski</option>
+                            </select>
+                            
+                            <label>Maksymalna liczba artykułów:</label>
+                            <input type="number" id="max-articles" min="1" max="20" value="6">
+                            
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="auto-translate" checked> Automatyczne tłumaczenie
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="auto-summarize" checked> Automatyczne streszczanie
+                                </label>
+                            </div>
+                            
+                            <button id="save-settings" class="btn-primary">
+                                <i class="fas fa-save"></i> Zapisz ustawienia
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- News View -->
+            <section id="news-view" class="view-section">
+                <div class="news-header">
+                    <h2>Twoje spersonalizowane newsy</h2>
+                    <button id="refresh-news" class="btn-primary">
+                        <i class="fas fa-sync-alt"></i> Odśwież
+                    </button>
+                </div>
+                
+                <div class="quick-actions">
+                    <button id="process-article-btn" class="btn-secondary">
+                        <i class="fas fa-link"></i> Przetwórz artykuł
+                    </button>
+                </div>
+
+                <section id="loading-section" class="loading-section" style="display: none;">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <p>Pobieranie i przetwarzanie newsów...</p>
+                    <div class="progress-steps">
+                        <div class="step" id="step-1">
+                            <i class="fas fa-download"></i> Pobieranie RSS
+                        </div>
+                        <div class="step" id="step-2">
+                            <i class="fas fa-language"></i> Tłumaczenie
+                        </div>
+                        <div class="step" id="step-3">
+                            <i class="fas fa-file-text"></i> Streszczanie
+                        </div>
+                    </div>
+                </section>
+
+                <section id="results-section" class="results-section" style="display: none;">
+                    <div class="results-header">
+                        <h2>Wyniki</h2>
+                        <div class="results-meta">
+                            <span id="articles-count">0 artykułów</span>
+                            <span id="processing-time">Czas przetwarzania: 0s</span>
+                        </div>
+                    </div>
+                    <div id="news-results" class="news-results"></div>
+                </section>
+
+                <section id="error-section" class="error-section" style="display: none;">
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Wystąpił błąd</h3>
+                        <p id="error-details">Nie można pobrać newsów. Spróbuj ponownie.</p>
+                        <button id="retry-btn" class="btn-primary">
+                            <i class="fas fa-redo"></i> Spróbuj ponownie
+                        </button>
+                    </div>
+                </section>
             </section>
         </main>
 
-        <footer>
-            <p>© 2024 News Summarizer. Powered by DeepL & OpenAI.</p>
-        </footer>
+        <!-- Add RSS Feed Modal -->
+        <div id="add-feed-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Dodaj nowy RSS Feed</h3>
+                    <button id="close-feed-modal" class="close-btn">&times;</button>
+                </div>
+                <form id="add-feed-form">
+                    <div class="input-group">
+                        <label for="feed-url">URL RSS:</label>
+                        <input type="url" id="feed-url" required placeholder="https://example.com/feed.xml">
+                    </div>
+                    <div class="input-group">
+                        <label for="feed-name">Nazwa (opcjonalna):</label>
+                        <input type="text" id="feed-name" placeholder="Mój RSS">
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-plus"></i> Dodaj feed
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Process Article Modal -->
+        <div id="process-article-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Przetwórz artykuł</h3>
+                    <button id="close-process-modal" class="close-btn">&times;</button>
+                </div>
+                <form id="process-article-form">
+                    <div class="input-group">
+                        <label for="article-url">URL artykułu:</label>
+                        <input type="url" id="article-url" required placeholder="https://example.com/article">
+                    </div>
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="process-translate" checked> Przetłumacz
+                        </label>
+                        <label>
+                            <input type="checkbox" id="process-summarize" checked> Stwórz streszczenie
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-cogs"></i> Przetwórz
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 
+    <script src="auth-script.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
